@@ -1,0 +1,108 @@
+%% process
+dt=0.1; g=9.81; u=g; duration=10;
+A=[1 dt; 0 1]; B=[.5*dt^2; dt]; C=[1 0];
+
+%% noise and disturbance properties
+
+model_cov=[0.1 0; 0 0.1]; %lets assume covariance of model disturbace is 
+%dependent on the discritization interval dt. if on the other hand we would
+%have assumed the noise to come from only the input u=g+randn(mu, var)
+%than a linear transformation B on random variable u, would have yielded
+%covariance= var*B*(var*B)'=var^2*B*B', which is a 2by2 matrix now, and is
+%very similar to model_cov here. see example of such disturbance in stident
+%dave's code. alternatively we could have defind model_cov=[1 0;0 1]
+% and it would have been ok. but this is more educated.
+
+
+model_mean=[0;0];
+obs_noise_var=10; %observation noise have a variance and not covariance 
+%because its a random scalar and not a random vector.
+obs_noise_mean=0;
+%% process and observations
+x=[0;0]; %state vector initial cond.
+
+true_y=[];
+obs_y=[];
+for t=0:dt:duration
+    x=A*x+B*u+mvnrnd(model_mean, model_cov,1)';
+    z=C*x +obs_noise_var*randn;
+    
+    %save info to an array for later use
+    true_y=[true_y;x(1)];
+    obs_y=[obs_y; z];
+    
+    %plot results
+    plot(0:dt:t, true_y,'-r.');hold on;
+    plot(0:dt:t, obs_y,'-g.');hold on;
+     
+    xlabel('time [s]');
+    ylabel('vertical position [m]');
+    axis([0 10 -10 500]);
+    
+    
+end
+
+%% kalman filter
+x_est=[0;0];
+P=zeros(2);
+k=zeros(2,1);
+est_y=[];
+
+for t=1:length(true_y)
+    x_est=A*x_est+B*u; %estimated state vec x based on quiet model only
+    
+    P=A*P*A'+model_cov; %covariance of model based only on linear transformation of model matricis
+    
+    K=P*C'*(C*P*C'+obs_noise_var)^(-1); % kalman gain matrix is 2by1 vector;
+    
+    x_est=x_est+K*(obs_y(t)-C*x_est); %update the state based on kalman gain and the difference from observation to observed state of quiet model
+    
+    P=(eye(2)-K*C)*P; %update covariance based on the state above
+    
+    
+    
+    %save info to an array for later use
+    est_y=[est_y;x_est(1)];
+    
+    
+
+    
+end
+    
+    tt=0:dt:duration;
+    %plot results
+    plot(tt, est_y,'-k.');hold on;
+   
+      
+    xlabel('time [s]');
+    ylabel('vertical position [m]');
+    legend('unobsereved true position', 'noisy observed position', 'estimated position')
+
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+
+
+    
+    
+    
+
+
+
+
+
+
+
+

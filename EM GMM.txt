@@ -1,0 +1,40 @@
+mu1=10; mu2=100;
+sigma1=1; sigma2=10;
+obs=[mvnrnd(mu1,sigma1,3000);mvnrnd(mu2,sigma2,3000)]; %random observations
+histogram(obs, 1000)
+
+% this problam involves 2 gaussians, hence MLE is not suitable. we are in 
+% need of a mixture of 2. we will use EM (without clustering of the data so 
+% that 2 initial mu's are given and we do not have to compute nuber of 
+% clusters (mu's))
+
+
+% % % % % % % 1D GMM EM % % % % % % % %
+% z1=[]; z2=[];
+tol=10^-6;
+i=1;
+% % initial conditions
+mu1_hat(i)=0; mu2_hat(i)=90;
+sigma1_hat=25; sigma2_hat=3;
+
+while(1)
+    i=i+1;
+%     expectation
+    p1=mvnpdf(obs,mu1_hat(i-1),sigma1_hat);
+    p2=mvnpdf(obs,mu2_hat(i-1),sigma2_hat);
+    z1=p1./(p1+p2);
+    z2=p2./(p1+p2);
+%     maximization
+    mu1_hat(i)=sum(z1.*obs)/sum(z1);
+    mu2_hat(i)=sum(z2.*obs)/sum(z2);
+%     for j=1:length(obs)
+%         sigma1_hat=sigma1_hat+z1(j)(obs(J)-mu1_hat(i))^2;
+%     end
+    sigma1_hat=sum(z1.*((obs - mu1_hat(i)*ones(length(obs),1)).^2))/sum(z1);
+    sigma2_hat=sum(z2.*((obs - mu2_hat(i)*ones(length(obs),1)).^2))/sum(z2);
+    if (abs(mu1_hat(i)-mu1_hat(i-1)) <= tol && abs(mu1_hat(i)-mu1_hat(i-1)) <= tol)
+        break;
+    end
+end
+disp('number of itterations: ' );
+i

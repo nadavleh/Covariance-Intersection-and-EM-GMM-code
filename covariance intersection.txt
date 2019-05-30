@@ -1,0 +1,157 @@
+% covariance intersection between two noisy obsevation estimates, of different kalman filters
+% each one dependent on an observation obs1 or obs2.
+
+%% process
+dt=0.1; g=9.81; u=g; duration=10;
+A=[1 dt; 0 1]; B=[.5*dt^2; dt]; C=[1 0];
+
+%% noise and disturbance properties
+
+model_cov=[1 0; 0 1]; %lets assume covariance of model disturbace is 
+%dependent on the discritization interval dt. if on the other hand we would
+%have assumed the noise to come from only the input u=g+randn(mu, var)
+%than a linear transformation B on random variable u, would have yielded
+%covariance= var*B*(var*B)'=var^2*B*B', which is a 2by2 matrix now, and is
+%very similar to model_cov here. see example of such disturbance in stident
+%dave's code. alternatively we could have defind model_cov=[1 0;0 1]
+% and it would have been ok. but this is more educated.
+
+
+model_mean=[0;0];
+obs1_noise_var=100; %observation noise have a variance and not covariance 
+%because its a random scalar and not a random vector. this value is for
+%sensor 1
+obs1_noise_mean=0;
+
+obs2_noise_var=300; %this value is noise for sensor 2
+obs2_noise_mean=10;
+
+%% process and observations
+x=[0;0]; %state vector initial cond.
+
+true_y=[];
+obs_y=[];
+for t=0:dt:duration
+    x=A*x+B*u+mvnrnd(model_mean, model_cov,1)';
+    z=C*x;
+    
+    %save info to an array for later use
+    true_y=[true_y;x(1)];
+    obs_y=[obs_y; z];
+   
+    
+end
+obs_y1=obs_y+mvnrnd(obs1_noise_mean, sqrt(obs1_noise_var),length(obs_y)); %add noise to process true observation, according to sensor number 1.
+obs_y2=obs_y+mvnrnd(obs2_noise_mean, sqrt(obs2_noise_var),length(obs_y));   %add noise to process true observation, in a different but equivalent way. sensor 2
+
+
+
+%% kalman filtering and data fusing
+
+% kalman filter 1 arrays initialization
+x_est1=[0;0];
+P1=zeros(2);
+k1=zeros(2,1);
+est_y1=[];
+
+% kalman filter 2 arrays initialization
+x_est2=[0;0];
+P2=zeros(2);
+k2=zeros(2,1);
+est_y2=[];
+
+fused_y=[];
+
+for t=1:length(true_y)
+    
+    % kalman filter 1
+    x_est1=A*x_est1+B*u; %estimated state vec x based on quiet model only 
+    P1=A*P1*A'+model_cov; %covariance of model based only on linear transformation of model matricis    
+    K1=P1*C'*(C*P1*C'+obs1_noise_var)^(-1); % kalman gain matrix is 2by1 vector;    
+    x_est1=x_est1+K1*(obs_y1(t)-C*x_est1); %update the state based on kalman gain and the difference from observation to observed state of quiet model    
+    P1=(eye(2)-K1*C)*P1; %update covariance based on the state above 
+    
+    %save info to an array for later use
+    est_y1=[est_y1;x_est1(1)];  
+    
+    % kalman filter 2
+    x_est2=A*x_est2+B*u; %estimated state vec x based on quiet model only  
+    P2=A*P2*A'+model_cov; %covariance of model based only on linear transformation of model matricis
+    K2=P2*C'*(C*P2*C'+obs2_noise_var)^(-1); % kalman gain matrix is 2by1 vector;
+    x_est2=x_est2+K2*(obs_y2(t)-C*x_est2); %update the state based on kalman gain and the difference from observation to observed state of quiet model
+    P2=(eye(2)-K2*C)*P2; %update covariance based on the state above    
+    
+    %save info to an array for later use
+    est_y2=[est_y2;x_est2(1)];   
+    
+    %C.I. data fusion
+     w=trace(P1)/(trace(P1)+trace(P2));
+     P_fused=(w*P1^(-1)+(1-w)*P2^(-1))^(-1);
+     x_fused=P_fused*(w*P1^(-1)*x_est1+(1-w)*P2^(-1)*x_est2);
+     fused_y=[fused_y;x_fused(1)]; 
+     
+     
+% uncomment to show covariance intersection evolution
+
+%     figure(1)
+%     clf;
+%     disp('press any key to show next iterration cov. press ctrl+c to exit')
+%     error_ellipse(P1); hold on;
+%     error_ellipse(P2); hold on;
+%     error_ellipse(P_fused); hold off;
+%     xlabel('position [m]');
+%     ylabel('velocity [m/s]');
+%     legend('estimated state 1 covariance ','estimated state 2 covariance', 'intersected covariance')
+%     title('covariance plot')
+%     axis([-10 10 -10 10]);
+%     pause;
+   
+
+     
+
+end
+
+    
+%%  data plotting
+    tt=0:dt:duration;
+    %plot results
+    figure(1)
+    clf; %clears figure, if i forgot to close plot window before next run, it clears it 
+    plot(tt, true_y,'-r.');hold on;
+    plot(tt, est_y1,'-k.');hold on;
+    plot(tt, est_y2,'-g.');hold on;  
+    plot(tt, fused_y,'-b.');hold on;
+    xlabel('time [s]');
+    ylabel('vertical position [m]');
+    legend('true position','est1 position', 'est2 position', 'fused position')
+    axis([0 10 -10 500]);
+    title('true position ,estimations 1&2 and fused estimation')
+    
+%   plot the sensor observations    
+    figure(2)
+    clf;
+   
+    plot(tt, true_y,'-r.');hold on;
+    plot(tt, obs_y1,'-g.');hold on;
+    plot(tt, obs_y2,'-y.');hold on;
+ 
+    xlabel('time [s]');
+    ylabel('vertical position [m]');
+    legend('true position','obs1 position', 'obs2 position')
+    axis([0 10 -10 500]);
+    title('true position and observations')
+    
+%   covariance plot of the last itteration,for evolution uncomment plot
+%   script in the kalman loop   
+    figure(3)
+    clf;
+    error_ellipse(P1); hold on;
+    error_ellipse(P2); hold on;
+    error_ellipse(P_fused); hold on;
+    xlabel('position [m]');
+    ylabel('velocity [m/s]');
+    legend('estimated state 1 covariance ','estimated state 2 covariance', 'intersected covariance')
+    title('covariance plot')
+    
+    
+    %% 
